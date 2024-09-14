@@ -1,9 +1,8 @@
-const TelegramBot = require('node-telegram-bot-api');
+const { Telegraf } = require('telegraf');
 const MercadoPago = require('mercadopago');
 
 // Substitua pelo seu token do bot do Telegram
-const token = '7273195528:AAEoqwXt-Pc85dLIOxQAfHmm3S-vt61GcHI';
-const bot = new TelegramBot(token, { polling: true });
+const bot = new Telegraf('7273195528:AAEoqwXt-Pc85dLIOxQAfHmm3S-vt61GcHI');
 
 // Configure a chave do Mercado Pago
 MercadoPago.configure({
@@ -36,15 +35,14 @@ async function checkPayment(paymentId) {
 }
 
 // Comando do bot para processar doações
-bot.onText(/\/(donate|doar|apoiar) (.+)/, async (msg, match) => {
-  const chatId = msg.chat.id;
-  const amount = match[2];
+bot.command(['donate', 'doar', 'apoiar'], async (ctx) => {
+  const amount = ctx.message.text.split(' ')[1];
 
   if (!amount) {
-    return bot.sendMessage(chatId, "Quanto você deseja doar?\nObs.: se for centavos, use 0.00.");
+    return ctx.reply("Quanto você deseja doar?\nObs.: se for centavos, use 0.00.");
   }
   if (isNaN(amount)) {
-    return bot.sendMessage(chatId, "Epa, somente número!!");
+    return ctx.reply("Epa, somente número!!");
   }
 
   try {
@@ -53,9 +51,9 @@ bot.onText(/\/(donate|doar|apoiar) (.+)/, async (msg, match) => {
     const qrCode = payment.body.qr_code;
     const copyPaste = payment.body.copy_paste;
 
-    bot.sendPhoto(chatId, Buffer.from(qrCode, 'base64'), { caption: "Esse é o QR Code. Caso queira o Pix Copia e Cola, vou te enviar abaixo..." });
-    bot.sendMessage(chatId, "*Depósito agendado com sucesso* ✔\n\n💡 Você tem um prazo de *10 minutos* para efetuar o depósito.\n\nUse o *PIX copia e cola* ou o *QR Code* abaixo para completar o depósito.");
-    bot.sendMessage(chatId, copyPaste);
+    await ctx.replyWithPhoto({ source: Buffer.from(qrCode, 'base64') }, { caption: "Esse é o QR Code. Caso queira o Pix Copia e Cola, vou te enviar abaixo..." });
+    await ctx.reply("*Depósito agendado com sucesso* ✔\n\n💡 Você tem um prazo de *10 minutos* para efetuar o depósito.\n\nUse o *PIX copia e cola* ou o *QR Code* abaixo para completar o depósito.");
+    await ctx.reply(copyPaste);
 
     let check = await checkPayment(paymentId);
 
@@ -65,18 +63,20 @@ bot.onText(/\/(donate|doar|apoiar) (.+)/, async (msg, match) => {
     }
 
     if (check.status === "approved") {
-      bot.sendMessage(chatId, 'Yupppi, obrigado(a) pelo seu apoio. 🥺❤️');
+      ctx.reply('Yupppi, obrigado(a) pelo seu apoio. 🥺❤️');
     } else {
-      bot.sendMessage(chatId, "*X - Pagamento expirado.*");
+      ctx.reply("*X - Pagamento expirado.*");
     }
   } catch (error) {
     console.error(error);
-    bot.sendMessage(chatId, `⌛ Pagamento Expirado ⌛\nℹ️ Caso tenha pago, ignore. ℹ️`);
+    ctx.reply(`⌛ Pagamento Expirado ⌛\nℹ️ Caso tenha pago, ignore. ℹ️`);
   }
 });
 
 // Comando padrão para mensagens não reconhecidas
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Bem-vindo ao bot de doações! Use /donate <valor> para doar.");
+bot.start((ctx) => {
+  ctx.reply("Bem-vindo ao bot de doações! Use /donate <valor> para doar.");
 });
-           
+
+// Iniciar o bot
+bot.launch();
